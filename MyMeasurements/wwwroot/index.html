@@ -1,0 +1,149 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Målinger</h1>
+    <div id="app"></div>
+
+    <script>
+
+        /*
+         * C - CREATE => INSERT INTO
+         * R - READ - lese alle og lese én => SELECT
+         * U - UPDATE => UPDATE
+         * D - DELETE => DELETE
+         */
+        getPeopleAndSensors();
+        getData();
+
+        // model
+        const model = {
+            inputs: {
+                mode: null,
+                measurement: {},
+            },
+        };
+
+        // view
+        function updateView() {
+            document.getElementById('app').innerHTML = `
+                                    <ul>
+                                        ${model.measurements.map(m => `
+                                        <li>
+                                            Verdi: ${m.value}
+                                            Tid: ${new Date(m.timeStamp).toLocaleString()}
+                                            Person: ${m.personName}
+                                            Sensor: ${m.sensorName}
+                                            <button onclick="deleteMeasurement('${m.id}')">x</button>
+                                            <button onclick="editMeasurement('${m.id}')">Rediger</button>
+                                        </li>
+                                        `).join('')}
+                                    </ul>
+                                    <button onclick="newMeasurement()">Lag ny</button>
+                                    ${createForm()}
+                                `;
+        }
+
+        function createForm() {
+            if (model.inputs.mode === null) return '';
+            return `
+                            <h3>${model.inputs.mode === 'new' ? 'Legg til ny' : 'Rediger'}</h3>
+                            Verdi: <br/>
+                            <input
+                                type="number"
+                                value="${model.inputs.measurement.value || ''}"
+                                oninput="model.inputs.measurement.value=this.valueAsNumber"
+                                /><br/>
+                            TimeStamp: <br/>
+                            <input
+                                type="datetime-local"
+                                value="${model.inputs.measurement.timeStamp}"
+                                oninput="model.inputs.measurement.timeStamp=this.value"
+                                /><br/>
+                            Person: <br/>
+                            <select onchange="model.inputs.measurement.personId=this.value">
+                                <option value=""></option>
+                                ${model.people.map(p => `
+                                <option
+                                    value="${p.id}"
+                                    ${model.inputs.measurement.personId === p.id ? 'selected' : ''}
+                                    >
+                                    ${p.name}
+                                </option>
+                                `).join('')}
+                            </select><br/>
+                            Sensor: <br/>
+                            <select onchange="model.inputs.measurement.sensorId=this.value">
+                                <option value=""></option>
+                                ${model.sensors.map(s => `
+                                <option
+                                    value="${s.id}"
+                                    ${model.inputs.measurement.sensorId === s.id ? 'selected' : ''}
+                                    >
+                                    ${s.name}
+                                </option>
+                                `).join('')}
+                            </select><br/>
+                            <button onclick="submit()">Registrer</button>
+                        `;
+        }
+
+        // controller
+        async function getData() {
+            const response = await axios.get('/measurement');
+            model.measurements = response.data;
+            updateView();
+        }
+
+        async function getPeopleAndSensors() {
+            let response = await axios.get('/person');
+            model.people = response.data;
+            response = await axios.get('/sensor');
+            model.sensors = response.data;
+        }
+
+        async function deleteMeasurement(id) {
+            const response = await axios.delete('/measurement/' + id);
+            const rowsAffected = response.data;
+            console.log(`slettet ${rowsAffected} rader`);
+            getData();
+        }
+
+        async function submit() {
+            const measurement = model.inputs.measurement;
+            let response;
+            if (model.inputs.mode === 'new') {
+                response = await axios.post('/measurement/', measurement);
+            } else if (model.inputs.mode === 'edit') {
+                response = await axios.put('/measurement/', measurement);
+            }
+            const rowsAffected = response.data;
+            console.log(`lagt til eller endret ${rowsAffected} rader`);
+            model.inputs.mode = null;
+            model.inputs.measurement = {};
+            getData();
+        }
+
+        async function newMeasurement(id) {
+            model.inputs.mode = 'new';
+            model.inputs.measurement.timeStamp = new Date().toISOString().substring(0, 23);
+            updateView();
+        }
+
+        async function editMeasurement(id) {
+            model.inputs.mode = 'edit';
+            model.inputs.measurement.id = id;
+            const measurement = model.measurements.find(m => m.id === id);
+            model.inputs.measurement.value = measurement.value;
+            model.inputs.measurement.timeStamp = measurement.timeStamp;
+            model.inputs.measurement.personId = measurement.personId;
+            model.inputs.measurement.sensorId = measurement.sensorId;
+            updateView();
+        }
+    </script>
+</body>
+</html>
